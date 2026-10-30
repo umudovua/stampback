@@ -1,0 +1,65 @@
+:root {
+  --kraft: #c9a27e;
+  --kraft-dark: #8b6a4e;
+  --stamp-red: #b8322a;
+  --ink: #23314f;
+  --paper: #efe2c8;
+  --font-display: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--kraft);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+}
+
+/* HTML qatı kanvasın üstündədir, amma matç zamanı toxunmaları tutmur. */
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  padding: env(safe-area-inset-top, 0px) 16px env(safe-area-inset-bottom, 0px);
+  font-family: var(--font-display);
+  color: var(--ink);
+}
+
+.title-stamp {
+  display: inline-block;
+  margin-top: 28px;
+  padding: 6px 16px 8px;
+  border: 4px solid var(--stamp-red);
+  border-radius: 6px;
+  color: var(--stamp-red);
+  font-size: clamp(28px, 9vw, 44px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  transform: rotate(-4deg);
+  opacity: 0.92;
+}
+
+.status {
+  margin-top: 18px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.status small {
+  display: block;
+  color: var(--kraft-dark);
+  font-size: 12px;
+}

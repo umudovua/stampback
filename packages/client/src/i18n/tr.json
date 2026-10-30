@@ -1,0 +1,7 @@
+{
+  "net.connecting": "Sunucuya bağlanılıyor…",
+  "net.connected": "Bağlandı",
+  "net.error": "Sunucuya bağlanılamadı. Sunucu çalışıyor mu?",
+  "net.players": "Odadaki oyuncu: {count}",
+  "net.session": "Oturum: {id}"
+}

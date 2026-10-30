@@ -1,0 +1,7 @@
+{
+  "net.connecting": "Connecting to server…",
+  "net.connected": "Connected",
+  "net.error": "Could not connect to the server. Is it running?",
+  "net.players": "Players in room: {count}",
+  "net.session": "Session: {id}"
+}

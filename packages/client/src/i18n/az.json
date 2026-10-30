@@ -1,0 +1,7 @@
+{
+  "net.connecting": "Serverə qoşulur…",
+  "net.connected": "Qoşuldu",
+  "net.error": "Serverə qoşulmaq alınmadı. Server işləyirmi?",
+  "net.players": "Otaqda oyunçu: {count}",
+  "net.session": "Sessiya: {id}"
+}

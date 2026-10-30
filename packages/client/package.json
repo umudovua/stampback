@@ -1,0 +1,22 @@
+{
+  "name": "@stampback/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "0.18.5",
+    "@stampback/shared": "workspace:*",
+    "phaser": "4.2.1",
+    "preact": "10.29.8"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "vite": "8.3.4"
+  }
+}
