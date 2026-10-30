@@ -41,7 +41,7 @@ export default defineConfig(
   js.configs.recommended,
   tseslint.configs.recommended,
   {
-    files: ['packages/server/**/*.ts', 'eslint.config.js', 'vitest.config.ts'],
+    files: ['packages/server/**/*.ts', 'tools/**/*.ts', 'eslint.config.js', 'vitest.config.ts'],
     languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
   },
   {

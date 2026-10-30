@@ -11,9 +11,10 @@
     "build": "pnpm -r --filter \"./packages/*\" build",
     "test": "vitest run",
     "lint": "eslint .",
-    "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
+    "typecheck": "pnpm -r --filter \"./packages/*\" --filter \"./tools/*\" typecheck",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "determinism": "pnpm --filter @stampback/determinism-check check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

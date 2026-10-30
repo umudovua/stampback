@@ -110,11 +110,15 @@ export class TowerSim {
     return new TowerSim(R, map);
   }
 
-  /** Giriş jurnalını `untilTick`-ə qədər təkrar oynadır (determinizm testi və gələcək server yoxlaması üçün). */
+  /**
+   * Giriş jurnalını `untilTick`-ə qədər təkrar oynadır (determinizm testi və gələcək server yoxlaması üçün).
+   * `onTick` hər fizika addımından sonra çağırılır, məsələn, aralıq hash-ləri toplamaq üçün.
+   */
   static async replay(
     map: MapDef,
     log: readonly ReleaseEvent[],
     untilTick: number,
+    onTick?: (sim: TowerSim) => void,
   ): Promise<TowerSim> {
     const sim = await TowerSim.create(map);
     let i = 0;
@@ -124,6 +128,7 @@ export class TowerSim {
         i++;
       }
       sim.stepWorld();
+      onTick?.(sim);
     }
     return sim;
   }

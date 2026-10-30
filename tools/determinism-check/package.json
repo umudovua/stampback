@@ -1,0 +1,19 @@
+{
+  "name": "@stampback/determinism-check",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tsx src/generate.ts",
+    "check": "tsx src/check.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@stampback/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright": "1.64.1",
+    "tsx": "4.23.15"
+  }
+}
