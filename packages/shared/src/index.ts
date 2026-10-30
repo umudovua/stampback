@@ -25,3 +25,7 @@ export interface BuildInfo {
 export function getBuildInfo(): BuildInfo {
   return { game: GAME_NAME, protocolVersion: PROTOCOL_VERSION };
 }
+
+export * from './physics';
+export * from './parcels/normal';
+export * from './maps';

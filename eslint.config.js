@@ -74,7 +74,12 @@ export default defineConfig(
   },
   {
     // Simulyasiya kodu: fizika və qaydalar deterministik olmalıdır.
-    files: ['packages/shared/src/physics/**/*.ts', 'packages/shared/src/rules/**/*.ts'],
+    files: [
+      'packages/shared/src/physics/**/*.ts',
+      'packages/shared/src/rules/**/*.ts',
+      'packages/shared/src/parcels/**/*.ts',
+      'packages/shared/src/maps/**/*.ts',
+    ],
     rules: {
       'no-restricted-properties': [
         'error',
