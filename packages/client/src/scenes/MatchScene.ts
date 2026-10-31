@@ -14,6 +14,8 @@ import { hudStore } from '../game/hudStore';
 import { InputController } from '../input/InputController';
 
 const STEP_MS = 1000 / TICK_RATE;
+/** Ekranın altında ipucu və debug mətni üçün saxlanılan yer (piksel). */
+const BOTTOM_RESERVE_PX = 56;
 /** Arxa plandan qayıdanda bir kadrda ən çox neçə tick yetişdirilir (arxitektura, 5.1). */
 const MAX_STEPS_PER_FRAME = 5;
 
@@ -236,13 +238,14 @@ export class MatchScene extends Phaser.Scene {
     const top = this.sim ? this.sim.getHeight() : 0;
     const target = Math.max(0, top * s - height * 0.35);
     this.cameraY = Phaser.Math.Linear(this.cameraY, target, Math.min(1, delta / 300));
-    this.cameras.main.scrollY = -height + s * 1.5 - this.cameraY;
+    // Yer səviyyəsi (y = 0) ekranda alt yazıların və platformanın üstündə qalır.
+    this.cameras.main.scrollY = -(height - BOTTOM_RESERVE_PX - s) - this.cameraY;
   }
 
   private layout(): void {
     const { width, height } = this.scale.gameSize;
-    const cellsAcross = POST_OFFICE.platformWidth + 4;
-    const newScale = Math.floor(Math.min(width / cellsAcross, height / 16));
+    const cellsAcross = POST_OFFICE.platformWidth + 2;
+    const newScale = Math.floor(Math.min(width / cellsAcross, height / 18));
     const rescale = newScale !== this.scalePx;
     this.scalePx = newScale;
     this.cameras.main.scrollX = -width / 2;

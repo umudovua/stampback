@@ -68,7 +68,8 @@ try {
     await page.keyboard.up('ArrowDown');
     await page.waitForTimeout(400);
   }
-  await page.waitForTimeout(1500);
+  // Qüllənin sabitləşməsini gözləyirik: hündürlük yalnız sabit bağlamalarla ölçülür.
+  await page.waitForTimeout(5000);
   await page.screenshot({ path: join(outDir, '2-tower.png') });
 
   const stats = await page.$$eval('.hud-stats strong', (els) => els.map((el) => el.textContent));

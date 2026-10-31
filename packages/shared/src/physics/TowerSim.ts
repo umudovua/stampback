@@ -12,11 +12,16 @@ import {
   FAST_DESCENT,
   GRAVITY_Y,
   LOST_Y,
+  PARCEL_ANGULAR_DAMPING,
+  PARCEL_FRICTION,
+  PARCEL_LINEAR_DAMPING,
   QUERY_HALF,
   SETTLE_TICKS,
   SLOW_DESCENT,
+  SOLVER_ITERATIONS,
   SPAWN_GAP_CELLS,
   TICK_RATE,
+  UNSETTLE_SPEED_SQ,
   X_STEPS_PER_CELL,
   Y_STEPS_PER_CELL,
 } from './constants';
@@ -86,6 +91,7 @@ interface TrackedBody {
   kind: NormalParcelKind;
   cells: readonly Cell[];
   calmTicks: number;
+  settled: boolean;
   releaseTick: number;
   reported: boolean;
 }
@@ -117,6 +123,7 @@ export class TowerSim {
     this.map = map;
     this.world = new R.World({ x: 0, y: GRAVITY_Y });
     this.world.timestep = 1 / TICK_RATE;
+    this.world.numSolverIterations = SOLVER_ITERATIONS;
 
     const platform = this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(0, -0.5));
     this.world.createCollider(
@@ -304,7 +311,7 @@ export class TowerSim {
 
   /** Bütün buraxılmış bağlamalar sabitləşibmi? */
   isSettled(): boolean {
-    return this.bodies.every((b) => b.calmTicks >= SETTLE_TICKS);
+    return this.bodies.every((b) => b.settled);
   }
 
   /** Render üçün cisimlərin vəziyyəti. */
@@ -318,7 +325,7 @@ export class TowerSim {
         y: t.y,
         angle: b.body.rotation(),
         cells: b.cells,
-        settled: b.calmTicks >= SETTLE_TICKS,
+        settled: b.settled,
       };
     });
   }
@@ -351,9 +358,19 @@ export class TowerSim {
       }
       const v = body.linvel();
       const w = body.angvel();
-      const calm = v.x * v.x + v.y * v.y < CALM_SPEED_SQ && w * w < CALM_SPEED_SQ;
-      tracked.calmTicks = calm ? tracked.calmTicks + 1 : 0;
-      const settled = tracked.calmTicks >= SETTLE_TICKS;
+      const speedSq = v.x * v.x + v.y * v.y;
+      const spinSq = w * w;
+      if (tracked.settled) {
+        if (speedSq > UNSETTLE_SPEED_SQ || spinSq > UNSETTLE_SPEED_SQ) {
+          tracked.settled = false;
+          tracked.calmTicks = 0;
+        }
+      } else {
+        const calm = speedSq < CALM_SPEED_SQ && spinSq < CALM_SPEED_SQ;
+        tracked.calmTicks = calm ? tracked.calmTicks + 1 : 0;
+        if (tracked.calmTicks >= SETTLE_TICKS) tracked.settled = true;
+      }
+      const settled = tracked.settled;
       if (settled && !tracked.reported) {
         tracked.reported = true;
         const ticksToCalm = this.currentTick - SETTLE_TICKS - tracked.releaseTick;
@@ -379,17 +396,17 @@ export class TowerSim {
     const R = this.R;
     const cells = parcelCells(event.parcel, event.rot);
     const body = this.world.createRigidBody(
-      R.RigidBodyDesc.dynamic().setTranslation(
-        event.x / X_STEPS_PER_CELL,
-        event.y / Y_STEPS_PER_CELL,
-      ),
+      R.RigidBodyDesc.dynamic()
+        .setTranslation(event.x / X_STEPS_PER_CELL, event.y / Y_STEPS_PER_CELL)
+        .setLinearDamping(PARCEL_LINEAR_DAMPING)
+        .setAngularDamping(PARCEL_ANGULAR_DAMPING),
     );
     for (const [c, r] of cells) {
       this.world.createCollider(
         R.ColliderDesc.cuboid(CELL_HALF, CELL_HALF)
           .setTranslation(c + CELL_HALF, r + CELL_HALF)
           .setDensity(1)
-          .setFriction(0.7)
+          .setFriction(PARCEL_FRICTION)
           .setRestitution(0),
         body,
       );
@@ -400,6 +417,7 @@ export class TowerSim {
       kind: event.parcel,
       cells,
       calmTicks: 0,
+      settled: false,
       releaseTick: event.tick,
       reported: false,
     });
