@@ -1,0 +1,14 @@
+{
+  "name": "@stampback/smoke",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "tsx src/smoke.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "tsx": "4.23.15"
+  }
+}

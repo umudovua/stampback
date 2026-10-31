@@ -3,5 +3,12 @@
   "net.connected": "Bağlandı",
   "net.error": "Sunucuya bağlanılamadı. Sunucu çalışıyor mu?",
   "net.players": "Odadaki oyuncu: {count}",
-  "net.session": "Oturum: {id}"
+  "net.session": "Oturum: {id}",
+  "hud.loading": "Yükleniyor…",
+  "hud.height": "Yükseklik",
+  "hud.perfect": "Mükemmel",
+  "hud.lost": "Kaybedilen",
+  "hud.next": "Sıradaki",
+  "hud.restart": "Yeniden",
+  "hud.hint": "Kaydır: hareket · Dokun: döndür · Aşağı kaydır: bırak"
 }

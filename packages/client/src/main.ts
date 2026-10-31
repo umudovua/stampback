@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { render, h } from 'preact';
-import { BootScene } from './scenes/BootScene';
+import { MatchScene } from './scenes/MatchScene';
 import { App } from './ui/App';
 import { getLocale, setLocale } from './i18n';
 
@@ -15,7 +15,7 @@ new Phaser.Game({
     width: window.innerWidth,
     height: window.innerHeight,
   },
-  scene: [BootScene],
+  scene: [MatchScene],
 });
 
 const uiRoot = document.getElementById('ui');

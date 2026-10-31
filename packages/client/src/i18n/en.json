@@ -3,5 +3,12 @@
   "net.connected": "Connected",
   "net.error": "Could not connect to the server. Is it running?",
   "net.players": "Players in room: {count}",
-  "net.session": "Session: {id}"
+  "net.session": "Session: {id}",
+  "hud.loading": "Loading…",
+  "hud.height": "Height",
+  "hud.perfect": "Perfect",
+  "hud.lost": "Lost",
+  "hud.next": "Next",
+  "hud.restart": "Restart",
+  "hud.hint": "Drag: move · Tap: rotate · Swipe down: drop"
 }

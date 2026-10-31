@@ -1,27 +1,14 @@
-import { useEffect, useState } from 'preact/hooks';
-import { t } from '../i18n';
-import { connectToMatch, type ConnectionStatus } from '../net/connect';
+import { Hud } from '../hud/Hud';
 
+/**
+ * HTML qatı. M1-də yalnız HUD göstərilir; lobby və otaq ekranları M3-də gəlir.
+ * Serverə qoşulma kodu (`net/connect.ts`) M3-ə qədər istifadə olunmur.
+ */
 export function App() {
-  const [status, setStatus] = useState<ConnectionStatus>({ kind: 'connecting' });
-
-  useEffect(() => {
-    void connectToMatch(setStatus);
-  }, []);
-
   return (
     <main>
       <div class="title-stamp">Stampback</div>
-      <p class="status" aria-live="polite">
-        {status.kind === 'connecting' && t('net.connecting')}
-        {status.kind === 'error' && t('net.error')}
-        {status.kind === 'connected' && (
-          <>
-            {t('net.connected')} · {t('net.players', { count: status.playerCount })}
-            <small>{t('net.session', { id: status.sessionId })}</small>
-          </>
-        )}
-      </p>
+      <Hud />
     </main>
   );
 }

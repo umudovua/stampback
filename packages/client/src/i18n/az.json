@@ -3,5 +3,12 @@
   "net.connected": "Qoşuldu",
   "net.error": "Serverə qoşulmaq alınmadı. Server işləyirmi?",
   "net.players": "Otaqda oyunçu: {count}",
-  "net.session": "Sessiya: {id}"
+  "net.session": "Sessiya: {id}",
+  "hud.loading": "Yüklənir…",
+  "hud.height": "Hündürlük",
+  "hud.perfect": "Mükəmməl",
+  "hud.lost": "İtirilən",
+  "hud.next": "Növbəti",
+  "hud.restart": "Yenidən",
+  "hud.hint": "Sürüşdür: hərəkət · Toxun: döndər · Aşağı sürüşdür: endir"
 }

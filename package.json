@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r --filter \"./packages/*\" --filter \"./tools/*\" typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "determinism": "pnpm --filter @stampback/determinism-check check"
+    "determinism": "pnpm --filter @stampback/determinism-check check",
+    "smoke": "pnpm --filter @stampback/smoke smoke"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
