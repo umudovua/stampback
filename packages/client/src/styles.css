@@ -196,14 +196,11 @@ body {
 }
 
 .hud-debug {
-  position: fixed;
-  left: 12px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
-  margin: 0;
+  margin: 6px 0 0;
   font:
     12px ui-monospace,
     monospace;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 .winner {

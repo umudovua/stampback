@@ -69,16 +69,16 @@ export function Hud() {
           <strong>{state.lost}</strong>
         </span>
       </div>
-      <button class="hud-restart" type="button" onClick={() => hudStore.requestRestart()}>
-        {t('hud.restart')}
-      </button>
-      <HeightLadder players={state.players} finish={state.finishHeight} />
-      <p class="hud-hint">{t('hud.hint')}</p>
       {showDebug && (
         <p class="hud-debug">
           FPS {state.fps.toFixed(0)} · fizika {state.physicsMs.toFixed(2)} ms
         </p>
       )}
+      <button class="hud-restart" type="button" onClick={() => hudStore.requestRestart()}>
+        {t('hud.restart')}
+      </button>
+      <HeightLadder players={state.players} finish={state.finishHeight} />
+      <p class="hud-hint">{t('hud.hint')}</p>
       {state.winner && (
         <div class="winner">
           <div class="winner-card">

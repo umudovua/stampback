@@ -392,6 +392,8 @@ export class MatchScene extends Phaser.Scene {
     const me = this.match?.me;
     const { width } = this.scale.gameSize;
     const top = this.beltTop();
+    // Lentin altındakı ipucu zolağı: piştaxta görünməsin, mətn oxunsun.
+    g.fillStyle(BACKGROUND, 1).fillRect(0, top + BELT_HEIGHT, width, HINT_SPACE + 40);
     g.fillStyle(BELT, 1).fillRect(0, top, width, BELT_HEIGHT);
     g.fillStyle(BELT_EDGE, 1)
       .fillRect(0, top, width, 5)
