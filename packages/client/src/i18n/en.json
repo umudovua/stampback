@@ -10,5 +10,11 @@
   "hud.lost": "Lost",
   "hud.next": "Next",
   "hud.restart": "Restart",
-  "hud.hint": "Drag: move · Tap: rotate · Swipe down: drop"
+  "hud.hint": "Drag: move · Tap: rotate · Swipe down: drop",
+  "hud.finish": "FINISH",
+  "hud.you": "You",
+  "hud.target": "target",
+  "hud.youWin": "You won",
+  "hud.winner": "{name} won",
+  "hud.playAgain": "Play again"
 }

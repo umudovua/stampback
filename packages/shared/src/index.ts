@@ -30,3 +30,4 @@ export * from './physics';
 export * from './parcels/normal';
 export * from './maps';
 export * from './rules';
+export * from './bots';

@@ -73,8 +73,10 @@ try {
   await page.screenshot({ path: join(outDir, '2-tower.png') });
 
   const stats = await page.$$eval('.hud-stats strong', (els) => els.map((el) => el.textContent));
+  const ladder = await page.$$eval('.ladder-name', (els) => els.map((el) => el.textContent));
+  if (ladder.length < 2) errors.push(`Hündürlük nərdivanında rəqiblər yoxdur (${ladder.length})`);
   const debug = await page.textContent('.hud-debug');
-  summary = `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]}, növbəti=${stats[3]} | ${debug}`;
+  summary = `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]}, növbəti=${stats[3]} | nərdivan: ${ladder.join(', ')} | ${debug}`;
   console.log(summary);
 
   const height = Number(stats[0]);

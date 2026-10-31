@@ -10,5 +10,11 @@
   "hud.lost": "Kaybedilen",
   "hud.next": "Sıradaki",
   "hud.restart": "Yeniden",
-  "hud.hint": "Kaydır: hareket · Dokun: döndür · Aşağı kaydır: bırak"
+  "hud.hint": "Kaydır: hareket · Dokun: döndür · Aşağı kaydır: bırak",
+  "hud.finish": "BİTİŞ",
+  "hud.you": "Sen",
+  "hud.target": "hedef",
+  "hud.youWin": "Kazandın",
+  "hud.winner": "{name} kazandı",
+  "hud.playAgain": "Tekrar oyna"
 }

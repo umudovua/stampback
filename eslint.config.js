@@ -79,6 +79,7 @@ export default defineConfig(
       'packages/shared/src/rules/**/*.ts',
       'packages/shared/src/parcels/**/*.ts',
       'packages/shared/src/maps/**/*.ts',
+      'packages/shared/src/bots/**/*.ts',
     ],
     rules: {
       'no-restricted-properties': [

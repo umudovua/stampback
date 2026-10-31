@@ -1,7 +1,19 @@
 import type { NormalParcelKind } from '@stampback/shared';
 
+export interface HudPlayer {
+  id: number;
+  name: string;
+  color: number;
+  height: number;
+  isMe: boolean;
+  isTarget: boolean;
+}
+
 /** Oyun səhnəsi ilə Preact HUD arasında paylaşılan vəziyyət. */
 export interface HudState {
+  players: HudPlayer[];
+  finishHeight: number;
+  winner: { name: string; isMe: boolean } | null;
   ready: boolean;
   height: number;
   perfect: number;
@@ -14,6 +26,9 @@ export interface HudState {
 type Listener = (state: HudState) => void;
 
 let state: HudState = {
+  players: [],
+  finishHeight: 15,
+  winner: null,
   ready: false,
   height: 0,
   perfect: 0,

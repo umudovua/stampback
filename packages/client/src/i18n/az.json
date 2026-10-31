@@ -10,5 +10,11 @@
   "hud.lost": "İtirilən",
   "hud.next": "Növbəti",
   "hud.restart": "Yenidən",
-  "hud.hint": "Sürüşdür: hərəkət · Toxun: döndər · Aşağı sürüşdür: endir"
+  "hud.hint": "Sürüşdür: hərəkət · Toxun: döndər · Aşağı sürüşdür: endir",
+  "hud.finish": "FİNİŞ",
+  "hud.you": "Sən",
+  "hud.target": "hədəf",
+  "hud.youWin": "Sən qalib gəldin",
+  "hud.winner": "{name} qalib gəldi",
+  "hud.playAgain": "Yenidən oyna"
 }

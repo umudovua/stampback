@@ -187,8 +187,7 @@ export class TowerSim {
     const cells = parcelCells(kind, rot);
     const { width } = cellBounds(cells);
     const x = -width * (X_STEPS_PER_CELL / 2);
-    const top = Math.ceil(this.getHeight());
-    const y = (top + SPAWN_GAP_CELLS) * Y_STEPS_PER_CELL;
+    const y = this.spawnY();
     if (this.collides(cells, x, y)) return false;
     this.activeParcel = { kind, x, y, rot, cells };
     this.fastDrop = false;
@@ -225,13 +224,25 @@ export class TowerSim {
   ghostY(): number | null {
     const p = this.activeParcel;
     if (!p) return null;
-    // Platformadan kənarda altda heç nə yoxdur: kölgə göstərilmir.
-    const floor = LOST_Y * Y_STEPS_PER_CELL;
-    let y = p.y;
-    const coarse = Y_STEPS_PER_CELL / 4;
-    while (y - coarse > floor && !this.collides(p.cells, p.x, y - coarse)) y -= coarse;
-    while (y - 1 > floor && !this.collides(p.cells, p.x, y - 1)) y -= 1;
-    return y - 1 > floor ? y : null;
+    return this.dropFrom(p.cells, p.x, p.y);
+  }
+
+  /**
+   * Verilmiş bağlama, dönmə və X mövqeyi üçün yerə düşmə Y-si (spawn hündürlüyündən endirilir).
+   * Botların plan qurması üçündür; simulyasiyanı dəyişmir. Altda heç nə yoxdursa `null`.
+   */
+  landingY(kind: NormalParcelKind, rot: Rotation, x: number): number | null {
+    const cells = parcelCells(kind, rot);
+    const y = this.spawnY();
+    if (this.collides(cells, x, y)) return null;
+    return this.dropFrom(cells, x, y);
+  }
+
+  /** Bağlamanın platformada qala biləcəyi X diapazonu (X addımı ilə). */
+  xRange(kind: NormalParcelKind, rot: Rotation): { min: number; max: number } {
+    const { width } = cellBounds(parcelCells(kind, rot));
+    const half = (this.map.platformWidth / 2) * X_STEPS_PER_CELL;
+    return { min: -half, max: half - width * X_STEPS_PER_CELL };
   }
 
   /** Son çağırışdan bəri baş vermiş hadisələri qaytarır və siyahını təmizləyir. */
@@ -454,6 +465,20 @@ export class TowerSim {
       }
     });
     return total === 0 ? 0 : supported / total;
+  }
+
+  private spawnY(): number {
+    return (Math.ceil(this.getHeight()) + SPAWN_GAP_CELLS) * Y_STEPS_PER_CELL;
+  }
+
+  /** (x, y)-dən aşağı endirib ilk toxunuş mövqeyini tapır; platformadan kənardadırsa `null`. */
+  private dropFrom(cells: readonly Cell[], x: number, startY: number): number | null {
+    const floor = LOST_Y * Y_STEPS_PER_CELL;
+    let y = startY;
+    const coarse = Y_STEPS_PER_CELL / 4;
+    while (y - coarse > floor && !this.collides(cells, x, y - coarse)) y -= coarse;
+    while (y - 1 > floor && !this.collides(cells, x, y - 1)) y -= 1;
+    return y - 1 > floor ? y : null;
   }
 
   /** Hüceyrələr (x, y) mövqeyində hər hansı kolliderlə kəsişirmi? */
