@@ -39,10 +39,13 @@ const server = createServer((req, res) => {
 await new Promise<void>((resolve) => server.listen(4173, resolve));
 
 const errors: string[] = [];
+let summary = '';
 const browser = await chromium.launch();
+let page0: import('playwright').Page | undefined;
 try {
   const context = await browser.newContext({ ...devices['Pixel 7'] });
   const page = await context.newPage();
+  page0 = page;
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`console: ${message.text()}`);
@@ -70,22 +73,35 @@ try {
 
   const stats = await page.$$eval('.hud-stats strong', (els) => els.map((el) => el.textContent));
   const debug = await page.textContent('.hud-debug');
-  console.log(
-    `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]}, növbəti=${stats[3]}`,
-  );
-  console.log(`Debug: ${debug}`);
+  summary = `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]}, növbəti=${stats[3]} | ${debug}`;
+  console.log(summary);
 
   const height = Number(stats[0]);
   if (!(height > 0))
     errors.push(`Qüllə hündürlüyü 0-dır: bağlamalar yerləşmədi (${stats.join(', ')})`);
+} catch (error) {
+  errors.push(
+    `exception: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`,
+  );
+  await page0?.screenshot({ path: join(outDir, '0-failure.png') }).catch(() => undefined);
 } finally {
   await browser.close();
   server.close();
 }
 
+// GitHub Actions-da nəticə annotasiya kimi də yazılır ki, API ilə oxuna bilsin.
+const inCi = Boolean(process.env.GITHUB_ACTIONS);
+const annotate = (level: 'error' | 'notice', message: string) => {
+  if (inCi) console.log(`::${level} title=Smoke::${message.replace(/\r?\n/g, ' ')}`);
+};
+
 if (errors.length > 0) {
   console.error('Smoke test UĞURSUZ:');
-  for (const error of errors) console.error(`  ${error}`);
+  for (const error of errors) {
+    console.error(`  ${error}`);
+    annotate('error', error);
+  }
   process.exit(1);
 }
+annotate('notice', summary);
 console.log('Smoke test keçdi. Ekran şəkilləri: tools/smoke/out/');

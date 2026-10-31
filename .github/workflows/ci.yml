@@ -39,6 +39,8 @@ jobs:
   # Client build-ini telefon ölçülü Chromium-da açır və ekran şəkillərini artefakt kimi saxlayır.
   smoke:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -55,3 +57,14 @@ jobs:
         with:
           name: smoke-screenshots
           path: tools/smoke/out/
+      # Ekran şəkilləri `smoke-screenshots` branch-inə də yazılır ki, linklə baxmaq mümkün olsun.
+      - name: Publish screenshots to branch
+        if: always() && github.event_name == 'push'
+        run: |
+          cd tools/smoke/out
+          git init -q -b smoke-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "smoke: ${GITHUB_SHA::7}"
+          git push -fq "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" smoke-screenshots
