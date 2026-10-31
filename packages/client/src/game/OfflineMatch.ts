@@ -1,4 +1,5 @@
 import {
+  Belt,
   BOT_PROFILES,
   BotPlayer,
   ParcelSequence,
@@ -14,34 +15,32 @@ export interface MatchPlayer {
   color: number;
   isMe: boolean;
   sim: TowerSim;
+  belt: Belt;
   bot: BotPlayer | null;
 }
 
 /**
- * Oflayn matç: oyunçu + botlar, hər biri öz qülləsində, hamı eyni bağlama ardıcıllığı ilə.
+ * Oflayn matç: oyunçu + botlar, hər biri öz qülləsində və öz lentində, hamı eyni bağlama ardıcıllığı ilə.
  * M3-də botların yerinə şəbəkədən gələn real oyunçular gələcək; səhnə eyni interfeysi görəcək.
  */
 export class OfflineMatch {
   readonly players: MatchPlayer[] = [];
-  readonly sequence: ParcelSequence;
   winner: MatchPlayer | null = null;
 
-  private constructor(seed: number) {
-    this.sequence = new ParcelSequence(seed);
-  }
-
   static async create(seed: number, myName: string, botCount = 3): Promise<OfflineMatch> {
-    const match = new OfflineMatch(seed);
+    const match = new OfflineMatch();
     match.players.push({
       id: 0,
       name: myName,
       color: PLAYER_COLORS[0],
       isMe: true,
       sim: await TowerSim.create(POST_OFFICE),
+      belt: new Belt(new ParcelSequence(seed)),
       bot: null,
     });
     for (let i = 0; i < botCount; i++) {
       const sim = await TowerSim.create(POST_OFFICE);
+      const belt = new Belt(new ParcelSequence(seed));
       const profile = BOT_PROFILES[i % BOT_PROFILES.length]!;
       match.players.push({
         id: i + 1,
@@ -49,10 +48,8 @@ export class OfflineMatch {
         color: PLAYER_COLORS[(i + 1) % PLAYER_COLORS.length]!,
         isMe: false,
         sim,
-        bot: new BotPlayer(sim, new ParcelSequence(seed), {
-          ...profile,
-          seed: profile.seed + seed,
-        }),
+        belt,
+        bot: new BotPlayer(sim, belt, { ...profile, seed: profile.seed + seed }),
       });
     }
     return match;
@@ -78,11 +75,13 @@ export class OfflineMatch {
     return this.me.sim.drainEvents();
   }
 
-  /** Oyunçunun növbəti bağlamasını yaradır (aktiv bağlama yoxdursa). */
-  spawnForMe(): void {
-    const sim = this.me.sim;
-    if (sim.active) return;
-    if (sim.spawnParcel(this.sequence.peek())) this.sequence.next();
+  /** Oyunçu lentdən bağlamanı götürüb x mövqeyindən buraxır. */
+  dropFromBelt(slot: number, x: number): void {
+    if (this.winner) return;
+    const item = this.me.belt.slots[slot];
+    if (!item) return;
+    this.me.belt.take(slot);
+    this.me.sim.dropAt(item.kind, item.rot, x);
   }
 
   /**

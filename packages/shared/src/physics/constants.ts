@@ -7,12 +7,8 @@ export const X_STEPS_PER_CELL = 4;
 /** Şaquli mövqe dəqiqliyi: bir hüceyrədə neçə addım (y = addım / Y_STEPS). */
 export const Y_STEPS_PER_CELL = 64;
 
-/** İdarə olunan bağlamanın enmə sürəti (Y addımı / tick). */
-export const SLOW_DESCENT = 1;
-export const FAST_DESCENT = 16;
-
-/** Yeni bağlama qüllənin üstündən neçə hüceyrə yuxarıda yaranır. */
-export const SPAWN_GAP_CELLS = 6;
+/** Bağlama qüllənin ən yüksək nöqtəsindən neçə hüceyrə yuxarıdan buraxılır. */
+export const DROP_GAP_CELLS = 1;
 
 /** Cazibə (hüceyrə / s²). */
 export const GRAVITY_Y = -20;
@@ -40,6 +36,5 @@ export const SOLVER_ITERATIONS = 8;
 /** Bu hündürlükdən aşağı düşən bağlama itirilmiş sayılır (hüceyrə). */
 export const LOST_Y = -10;
 
-/** Hüceyrə kolliderinin yarı-ölçüsü və toqquşma sorğusu üçün bir az kiçildilmiş variantı. */
-export const CELL_HALF = 0.5;
-export const QUERY_HALF = 0.48;
+/** Toqquşma sorğularında qutunu hər tərəfdən bu qədər kiçildirik ki, toxunan qonşular “kəsişmə” sayılmasın. */
+export const QUERY_MARGIN = 0.02;

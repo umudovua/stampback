@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { POST_OFFICE } from '../maps';
 import { TowerSim } from '../physics/TowerSim';
+import { Belt } from '../rules/belt';
 import { ParcelSequence } from '../rules/sequence';
 import { BOT_PROFILES, BotPlayer } from './BotPlayer';
 
 async function runBot(profileIndex: number, ticks: number) {
   const sim = await TowerSim.create(POST_OFFICE);
-  const bot = new BotPlayer(sim, new ParcelSequence(11), BOT_PROFILES[profileIndex]!);
+  const bot = new BotPlayer(sim, new Belt(new ParcelSequence(11)), BOT_PROFILES[profileIndex]!);
   for (let t = 0; t < ticks; t++) {
     bot.tick();
     sim.step();
@@ -15,10 +16,10 @@ async function runBot(profileIndex: number, ticks: number) {
 }
 
 describe('BotPlayer', () => {
-  it('builds a tower over 40 seconds without losing most parcels', async () => {
-    const sim = await runBot(0, 60 * 40);
-    expect(sim.log.length).toBeGreaterThan(8);
-    expect(sim.getHeight()).toBeGreaterThan(3);
+  it('builds a tower over 60 seconds without losing most parcels', async () => {
+    const sim = await runBot(0, 60 * 60);
+    expect(sim.log.length).toBeGreaterThan(10);
+    expect(sim.getHeight()).toBeGreaterThan(4);
     expect(sim.lostCount).toBeLessThan(sim.log.length / 2);
     sim.dispose();
   });

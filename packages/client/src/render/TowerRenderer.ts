@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { BodyView, TowerSim } from '@stampback/shared';
-import { CARDBOARD, drawParcel } from './parcelArt';
+import { CARDBOARD, drawBox } from './parcelArt';
 
 export interface TowerStyle {
   /** Skotçun rəngi: oyunçunun rəngi. */
@@ -105,7 +105,7 @@ export class TowerRenderer {
   private create(view: BodyView, state: Sprite['curr']): Sprite {
     const g = this.scene.add.graphics().setDepth(this.style.depth).setAlpha(this.style.alpha);
     const tint = this.style.tint;
-    drawParcel(g, view.cells, this.scalePx, {
+    drawBox(g, view.w, view.h, this.scalePx, {
       fill: tint ?? CARDBOARD[view.kind],
       tape: this.style.tape,
       outline: tint,

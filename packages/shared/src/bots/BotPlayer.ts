@@ -1,51 +1,49 @@
-import { cellBounds, parcelCells, type NormalParcelKind, type Rotation } from '../parcels/normal';
+import { parcelSize, type ParcelRotation } from '../parcels/catalog';
 import { Y_STEPS_PER_CELL } from '../physics/constants';
 import type { TowerSim } from '../physics/TowerSim';
+import type { Belt } from '../rules/belt';
 import { SeededRandom } from '../rules/random';
-import type { ParcelSequence } from '../rules/sequence';
 
 /** Botun xarakteri: nə qədər dəqiq və nə qədər tez oynadığı. */
 export interface BotProfile {
   seed: number;
   /** 0–1: ən yaxşı planı seçmə ehtimalı. Qalan hallarda bir az pis variant seçir. */
   accuracy: number;
-  /** Yeni bağlama gələndə düşünmə müddəti (tick), [min, max]. */
+  /** İki bağlama arasında düşünmə müddəti (tick), [min, max]. */
   thinkTicks: readonly [number, number];
-  /** İki hərəkət arasında fasilə (tick). */
-  actionTicks: number;
 }
 
 export const BOT_PROFILES: readonly BotProfile[] = [
-  { seed: 101, accuracy: 0.75, thinkTicks: [20, 50], actionTicks: 5 },
-  { seed: 202, accuracy: 0.6, thinkTicks: [30, 70], actionTicks: 7 },
-  { seed: 303, accuracy: 0.85, thinkTicks: [25, 60], actionTicks: 6 },
+  { seed: 101, accuracy: 0.75, thinkTicks: [60, 110] },
+  { seed: 202, accuracy: 0.6, thinkTicks: [80, 140] },
+  { seed: 303, accuracy: 0.85, thinkTicks: [70, 120] },
 ];
 
-interface Plan {
-  rot: Rotation;
+interface Candidate {
+  slot: number;
+  rot: ParcelRotation;
   x: number;
-}
-
-interface Candidate extends Plan {
   score: number;
 }
 
 /** Mərkəzdən uzaqlaşmanın cəzası: botlar qülləni platformanın ortasında saxlamağa çalışır. */
-const CENTER_PENALTY = 0.12;
+const CENTER_PENALTY = 0.15;
+/** Qüllə hələ hərəkətdədirsə, bot gözləyir; ən çox bu qədər tick. */
+const MAX_WAIT_FOR_SETTLE = 90;
 
 /**
- * Sadə qaydalarla oynayan bot (GDD, bölmə 7): ən aşağı yerə, mərkəzə yaxın qoymağa çalışır,
- * arabir qəsdən səhv edir. İnsan tempində hərəkət edir: düşünür, döndərir, sürüşdürür, endirir.
- * Yalnız seed-li təsadüfilik istifadə edir, ona görə deterministikdir.
+ * Sadə qaydalarla oynayan bot (GDD, bölmə 7): lentdəki 3 bağlamanı, hər iki dönməni və bütün
+ * mövqeləri yoxlayır; ən aşağı və mərkəzə yaxın yeri seçir, arabir qəsdən səhv edir.
+ * İnsan tempində oynayır. Yalnız seed-li təsadüfilik istifadə edir, ona görə deterministikdir.
  */
 export class BotPlayer {
   private readonly rng: SeededRandom;
-  private plan: Plan | null = null;
-  private wait = 0;
+  private wait: number;
+  private waitedForSettle = 0;
 
   constructor(
     readonly sim: TowerSim,
-    private readonly sequence: ParcelSequence,
+    private readonly belt: Belt,
     private readonly profile: BotProfile,
   ) {
     this.rng = new SeededRandom(profile.seed);
@@ -54,39 +52,23 @@ export class BotPlayer {
 
   /** Hər tick-də `sim.step()`-dən əvvəl çağırılır. */
   tick(): void {
-    const sim = this.sim;
     if (this.wait > 0) {
       this.wait--;
       return;
     }
-
-    const active = sim.active;
-    if (!active) {
-      if (sim.spawnParcel(this.sequence.peek())) {
-        this.sequence.next();
-        this.plan = null;
-        this.wait = this.randomThink();
-      } else {
-        this.wait = 30;
-      }
+    // Ehtiyatlı oyunçu kimi: qüllə yırğalanırsa, bir az gözləyir.
+    if (!this.sim.isSettled() && this.waitedForSettle < MAX_WAIT_FOR_SETTLE) {
+      this.waitedForSettle++;
       return;
     }
+    this.waitedForSettle = 0;
 
-    if (!this.plan) {
-      this.plan = this.choosePlan(active.kind);
-      return;
+    const choice = this.choose();
+    if (choice) {
+      const item = this.belt.take(choice.slot);
+      if (item) this.sim.dropAt(item.kind, choice.rot, choice.x);
     }
-
-    if (active.rot !== this.plan.rot) {
-      if (!sim.rotate()) this.plan.rot = active.rot;
-    } else if (active.x !== this.plan.x) {
-      const dir = this.plan.x > active.x ? 1 : -1;
-      if (!sim.move(dir)) this.plan.x = active.x;
-    } else {
-      sim.setFastDrop(true);
-      return;
-    }
-    this.wait = this.profile.actionTicks;
+    this.wait = this.randomThink();
   }
 
   private randomThink(): number {
@@ -94,33 +76,28 @@ export class BotPlayer {
     return min + this.rng.nextInt(max - min + 1);
   }
 
-  /** Bütün dönmə və mövqeləri yoxlayır; ən aşağı və mərkəzə yaxın yeri seçir. */
-  private choosePlan(kind: NormalParcelKind): Plan {
+  private choose(): Candidate | null {
     const sim = this.sim;
     const candidates: Candidate[] = [];
-    const seen = new Set<string>();
-    for (let r = 0; r < 4; r++) {
-      const rot = r as Rotation;
-      const cells = parcelCells(kind, rot);
-      const key = cells.map(([c, row]) => `${c},${row}`).join(';');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const { width, height } = cellBounds(cells);
-      const { min, max } = sim.xRange(kind, rot);
-      for (let x = min; x <= max; x += 2) {
-        const landing = sim.landingY(kind, rot, x);
-        if (landing === null) continue;
-        const top = landing / Y_STEPS_PER_CELL + height;
-        const centerOffset = x / 4 + width / 2;
-        const score = top + Math.abs(centerOffset) * CENTER_PENALTY;
-        candidates.push({ rot, x, score });
+    this.belt.slots.forEach((item, slot) => {
+      for (const rot of [0, 1] as const) {
+        const { w, h } = parcelSize(item.kind, rot);
+        if (rot === 1 && w === h) continue;
+        const { min, max } = sim.xRange(item.kind, rot);
+        for (let x = min; x <= max; x += 2) {
+          const landing = sim.landingY(item.kind, rot, x);
+          if (landing === null) continue;
+          const top = landing / Y_STEPS_PER_CELL + h;
+          const center = x / 4 + w / 2;
+          // Aşağı və mərkəzə yaxın, həm də enli/alçaq qutuları (sabit) üstün tutur.
+          const score = top + Math.abs(center) * CENTER_PENALTY + h * 0.2 - w * 0.05;
+          candidates.push({ slot, rot, x, score });
+        }
       }
-    }
-    if (candidates.length === 0) return { rot: 0, x: sim.active?.x ?? 0 };
-    candidates.sort((a, b) => a.score - b.score || a.x - b.x || a.rot - b.rot);
-    const pickBest = this.rng.nextInt(1000) < this.profile.accuracy * 1000;
-    const index = pickBest ? 0 : this.rng.nextInt(Math.min(5, candidates.length));
-    const choice = candidates[index]!;
-    return { rot: choice.rot, x: choice.x };
+    });
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => a.score - b.score || a.slot - b.slot || a.x - b.x || a.rot - b.rot);
+    const best = this.rng.nextInt(1000) < this.profile.accuracy * 1000;
+    return candidates[best ? 0 : this.rng.nextInt(Math.min(6, candidates.length))]!;
   }
 }

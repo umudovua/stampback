@@ -68,10 +68,6 @@ export function Hud() {
           <small>{t('hud.lost')}</small>
           <strong>{state.lost}</strong>
         </span>
-        <span class="hud-pill">
-          <small>{t('hud.next')}</small>
-          <strong class="hud-next">{state.next ?? '–'}</strong>
-        </span>
       </div>
       <button class="hud-restart" type="button" onClick={() => hudStore.requestRestart()}>
         {t('hud.restart')}

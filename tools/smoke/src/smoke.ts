@@ -55,18 +55,24 @@ try {
   await page.waitForSelector('.hud-stats', { timeout: 30_000 });
   await page.screenshot({ path: join(outDir, '1-start.png') });
 
-  // 6 bağlama: hərəsini bir az sürüşdürüb sürətli endiririk.
+  // Lentdən 4 bağlamanı siçanla sürükləyib qüllənin üstünə buraxırıq, 2-sini klaviatura ilə.
   const box = page.viewportSize()!;
-  for (let i = 0; i < 6; i++) {
-    const shift = (i % 3) - 1;
-    for (let m = 0; m < Math.abs(shift); m++) {
-      await page.keyboard.press(shift < 0 ? 'ArrowLeft' : 'ArrowRight');
-    }
-    if (i % 2 === 1) await page.touchscreen.tap(box.width / 2, box.height / 2);
-    await page.keyboard.down('ArrowDown');
-    await page.waitForTimeout(1500);
-    await page.keyboard.up('ArrowDown');
-    await page.waitForTimeout(400);
+  const beltY = box.height - 30 - 52;
+  const targets = [-40, 30, 0, -10];
+  for (let i = 0; i < targets.length; i++) {
+    const slotX = (box.width / 3) * ((i % 3) + 0.5);
+    await page.mouse.move(slotX, beltY);
+    await page.mouse.down();
+    await page.mouse.move(box.width / 2 + targets[i]!, box.height * 0.35, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(1600);
+    if (i === 1) await page.screenshot({ path: join(outDir, '1b-dragging.png') });
+  }
+  for (let i = 0; i < 2; i++) {
+    await page.keyboard.press('Digit2');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(1600);
   }
   // Qüllənin sabitləşməsini gözləyirik: hündürlük yalnız sabit bağlamalarla ölçülür.
   await page.waitForTimeout(5000);
@@ -76,7 +82,7 @@ try {
   const ladder = await page.$$eval('.ladder-name', (els) => els.map((el) => el.textContent));
   if (ladder.length < 2) errors.push(`Hündürlük nərdivanında rəqiblər yoxdur (${ladder.length})`);
   const debug = await page.textContent('.hud-debug');
-  summary = `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]}, növbəti=${stats[3]} | nərdivan: ${ladder.join(', ')} | ${debug}`;
+  summary = `HUD: hündürlük=${stats[0]}, mükəmməl=${stats[1]}, itirilən=${stats[2]} | nərdivan: ${ladder.join(', ')} | ${debug}`;
   console.log(summary);
 
   const height = Number(stats[0]);

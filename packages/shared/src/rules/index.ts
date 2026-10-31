@@ -4,6 +4,7 @@
  */
 export { SeededRandom } from './random';
 export { ParcelSequence } from './sequence';
+export { Belt, BELT_SLOTS, type BeltItem } from './belt';
 export {
   isPerfectPlacement,
   PERFECT_MAX_CALM_TICKS,

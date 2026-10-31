@@ -1,5 +1,5 @@
 /**
- * Deterministik qüllə simulyasiyası (milestone M1).
+ * Deterministik qüllə simulyasiyası.
  *
  * Determinizm qaydaları (bu qovluq üçün ESLint ilə məcburidir):
  * - Math.random / Math.sin / Math.cos / Math.tan və digər transendent funksiyalar qadağandır
@@ -10,10 +10,4 @@
 export * from './constants';
 export { fnv1a32 } from './hash';
 export { loadRapier } from './rapier';
-export {
-  TowerSim,
-  type ActiveParcel,
-  type BodyView,
-  type ReleaseEvent,
-  type SimEvent,
-} from './TowerSim';
+export { TowerSim, type BodyView, type ReleaseEvent, type SimEvent } from './TowerSim';

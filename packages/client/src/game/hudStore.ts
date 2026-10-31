@@ -1,5 +1,3 @@
-import type { NormalParcelKind } from '@stampback/shared';
-
 export interface HudPlayer {
   id: number;
   name: string;
@@ -18,7 +16,6 @@ export interface HudState {
   height: number;
   perfect: number;
   lost: number;
-  next: NormalParcelKind | null;
   fps: number;
   physicsMs: number;
 }
@@ -33,7 +30,6 @@ let state: HudState = {
   height: 0,
   perfect: 0,
   lost: 0,
-  next: null,
   fps: 0,
   physicsMs: 0,
 };

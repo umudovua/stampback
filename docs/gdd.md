@@ -1,7 +1,23 @@
-# Stampback — Game Design Document (GDD) v1.0
+# Stampback — Game Design Document (GDD) v1.1
 
 > Mənbə: claude.ai-dakı "Stampback — Game Design Document (GDD) v1.0" sənədi, 31 oktyabr 2026.
 > Sənəd dəyişəndə bu nüsxəni də yeniləyin.
+
+## Dəyişiklik qeydi: v1.1 (M1 playtest-indən sonra)
+
+M1 prototipində istifadəçi oyunun Tetris kimi hiss olunduğunu bildirdi. Səbəb təkcə tetromino formaları deyildi:
+yuxarıdan yavaş düşən idarə olunan fiqur, kölgə (ghost) və şəbəkəyə bağlı hərəkət birbaşa Tetris idarəetməsidir.
+Qərar (istifadəçi tərəfindən təsdiqlənib):
+
+- **Tetromino-lar yox, real qutular:** 7 növ düzbucaqlı qutu, ölçüləri yarım hüceyrə dəqiqliyi ilə
+  (kub, kərpic, uzun, boru, böyük, enli, yeşik). Düzbucaqlı qutu yalnız 90° döndərilir (en ↔ hündürlük).
+- **Düşən fiqur yox, çeşidləmə lenti:** ekranın altında 3 bağlamalı lent. Oyunçu istədiyi bağlamanı lentdən
+  sürükləyib qüllənin üstündə buraxır, bağlama real fizika ilə düşür. Lentdəki bağlamaya toxunmaq onu döndərir.
+- **Kölgə yox:** yalnız düşəcəyi yerə qədər nazik bələdçi xətlər.
+- **Draft ilə birləşmə (M2-də dəqiqləşəcək):** lentdən gələn bağlamanı ya öz qüllənə qoyursan, ya da ən yaxın
+  rəqibinə hədiyyə kimi atırsan. Ayrıca draft ekranı lazım olmaya bilər. Bölmə 3.2 M2 dizaynında yenilənəcək.
+
+Aşağıdakı bölmələrdə 3.1, 4 (normal bağlamalar) və 6 (idarəetmə) bu qeydə görə oxunmalıdır.
 
 ## 1. Xülasə
 

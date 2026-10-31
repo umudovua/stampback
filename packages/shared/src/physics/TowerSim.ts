@@ -1,38 +1,31 @@
 import type { MapDef } from '../maps';
-import {
-  cellBounds,
-  parcelCells,
-  type Cell,
-  type NormalParcelKind,
-  type Rotation,
-} from '../parcels/normal';
+import { parcelSize, type ParcelKind, type ParcelRotation } from '../parcels/catalog';
+import { isPerfectPlacement } from '../rules/perfect';
 import {
   CALM_SPEED_SQ,
-  CELL_HALF,
-  FAST_DESCENT,
+  DROP_GAP_CELLS,
   GRAVITY_Y,
   LOST_Y,
   PARCEL_ANGULAR_DAMPING,
   PARCEL_FRICTION,
   PARCEL_LINEAR_DAMPING,
-  QUERY_HALF,
+  QUERY_MARGIN,
   SETTLE_TICKS,
-  SLOW_DESCENT,
   SOLVER_ITERATIONS,
-  SPAWN_GAP_CELLS,
   TICK_RATE,
   UNSETTLE_SPEED_SQ,
   X_STEPS_PER_CELL,
   Y_STEPS_PER_CELL,
 } from './constants';
-import { isPerfectPlacement } from '../rules/perfect';
 import { fnv1a32 } from './hash';
 import { loadRapier, type Rapier } from './rapier';
 
 /** Bu bucaqdan (radian) çox əyilmiş bağlama “düz” sayılmır. */
 const MAX_FLAT_ANGLE = 0.05;
-/** Alt hüceyrə boyunca dəstək yoxlaması nöqtələri (hüceyrə mərkəzinə nisbətən). */
-const SUPPORT_SAMPLES = [-0.375, -0.125, 0.125, 0.375] as const;
+/** Alt səth boyunca dəstək yoxlaması: hər hüceyrəyə düşən nöqtə sayı. */
+const SUPPORT_SAMPLES_PER_CELL = 4;
+/** Hündürlük şüalarının arası (hüceyrə). */
+const RAY_SPACING = 0.25;
 
 type World = InstanceType<Rapier['World']>;
 type RigidBody = ReturnType<World['createRigidBody']>;
@@ -40,17 +33,17 @@ type Collider = ReturnType<World['createCollider']>;
 
 /**
  * Giriş jurnalının qeydi. Fizika dünyası YALNIZ bu hadisələrdən asılıdır:
- * idarə olunan bağlama buraxılana qədər fizikaya daxil deyil.
+ * bağlama sol-aşağı küncü (x, y) olmaqla, hərəkətsiz halda dünyaya əlavə olunur.
  */
 export interface ReleaseEvent {
   tick: number;
   type: 'release';
-  parcel: NormalParcelKind;
+  parcel: ParcelKind;
+  rot: ParcelRotation;
   /** Sol-aşağı künc, X addımı ilə (1 hüceyrə = X_STEPS_PER_CELL). */
   x: number;
   /** Sol-aşağı künc, Y addımı ilə (1 hüceyrə = Y_STEPS_PER_CELL). */
   y: number;
-  rot: Rotation;
 }
 
 /** Simulyasiyanın xəbər verdiyi hadisələr (HUD, xal və marka üçün). */
@@ -65,31 +58,27 @@ export type SimEvent =
     }
   | { type: 'lost'; id: number; tick: number };
 
-/** Oyunçunun hələ idarə etdiyi, fizikaya daxil olmayan bağlama. */
-export interface ActiveParcel {
-  kind: NormalParcelKind;
-  x: number;
-  y: number;
-  rot: Rotation;
-  cells: readonly Cell[];
-}
-
 /** Render üçün cisim görünüşü. `angle` yalnız çəkmək üçündür, simulyasiyaya qayıtmır. */
 export interface BodyView {
   id: number;
-  kind: NormalParcelKind;
+  kind: ParcelKind;
+  rot: ParcelRotation;
+  /** Bağlamanın sol-aşağı küncü (dünya koordinatı, hüceyrə). */
   x: number;
   y: number;
   angle: number;
-  cells: readonly Cell[];
+  w: number;
+  h: number;
   settled: boolean;
 }
 
 interface TrackedBody {
   id: number;
   body: RigidBody;
-  kind: NormalParcelKind;
-  cells: readonly Cell[];
+  kind: ParcelKind;
+  rot: ParcelRotation;
+  w: number;
+  h: number;
   calmTicks: number;
   settled: boolean;
   releaseTick: number;
@@ -100,8 +89,9 @@ interface TrackedBody {
  * Bir oyunçunun qülləsinin deterministik simulyasiyası (docs/architecture.md, bölmə 4–5).
  *
  * - 60 Hz sabit addım; vaxt = tam ədədli tick.
- * - Bağlama buraxılana qədər kinematik deyil, sırf məlumatdır; buraxılanda dinamik cismə çevrilir.
- * - Dönmə tam ədədli hüceyrə çevrilməsi ilə edilir, ona görə trigonometriya lazım deyil.
+ * - Oyunçu bağlamanı lentdən götürüb qüllənin üstünə aparır və buraxır (`dropAt`);
+ *   bağlama buraxılma xəttindən real fizika ilə düşür.
+ * - Bucaqlar radianla saxlanmır: düzbucaqlı qutu üçün 90° döndərmə sadəcə en və hündürlüyün yerini dəyişir.
  */
 export class TowerSim {
   readonly map: MapDef;
@@ -113,9 +103,7 @@ export class TowerSim {
   private currentTick = 0;
   private nextBodyId = 1;
   private lost = 0;
-  private activeParcel: ActiveParcel | null = null;
-  private fastDrop = false;
-  private heightCache: { tick: number; value: number } | null = null;
+  private cache: { tick: number; settled: number; any: number } | null = null;
   private pendingEvents: SimEvent[] = [];
 
   private constructor(R: Rapier, map: MapDef) {
@@ -131,8 +119,8 @@ export class TowerSim {
       platform,
     );
     // Rapier sorğu strukturlarını (broad phase) ilk addımda qurur. Boş dünyada bir hazırlıq
-    // addımı edirik ki, ilk spawn və kölgə sorğuları platformanı görsün. Dinamik cisim
-    // olmadığı üçün nəticəyə təsir etmir; tick sayına daxil edilmir.
+    // addımı edirik ki, ilk sorğular platformanı görsün. Dinamik cisim olmadığı üçün nəticəyə
+    // təsir etmir; tick sayına daxil edilmir.
     this.world.step();
   }
 
@@ -156,7 +144,7 @@ export class TowerSim {
     let i = 0;
     while (sim.currentTick < untilTick) {
       while (i < log.length && log[i]!.tick === sim.currentTick) {
-        sim.addDynamicParcel(log[i]!);
+        sim.addBody(log[i]!);
         i++;
       }
       sim.stepWorld();
@@ -177,72 +165,78 @@ export class TowerSim {
     return this.releaseLog;
   }
 
-  get active(): ActiveParcel | null {
-    return this.activeParcel;
+  /** Bağlamanın buraxılacağı hündürlük (Y addımı): qüllənin ən yüksək nöqtəsinin bir az üstü. */
+  dropLineY(): number {
+    return Math.ceil((this.getTopAny() + DROP_GAP_CELLS) * Y_STEPS_PER_CELL);
   }
 
-  /** Yeni idarə olunan bağlama yaradır. Artıq aktiv bağlama varsa və ya yer tutulubsa `false`. */
-  spawnParcel(kind: NormalParcelKind, rot: Rotation = 0): boolean {
-    if (this.activeParcel) return false;
-    const cells = parcelCells(kind, rot);
-    const { width } = cellBounds(cells);
-    const x = -width * (X_STEPS_PER_CELL / 2);
-    const y = this.spawnY();
-    if (this.collides(cells, x, y)) return false;
-    this.activeParcel = { kind, x, y, rot, cells };
-    this.fastDrop = false;
-    return true;
+  /** Bağlamanın mərkəzi platformanın üstündə qalacaq X diapazonu (X addımı ilə). */
+  xRange(kind: ParcelKind, rot: ParcelRotation): { min: number; max: number } {
+    const { w } = parcelSize(kind, rot);
+    const half = (this.map.platformWidth / 2) * X_STEPS_PER_CELL;
+    const halfW = (w / 2) * X_STEPS_PER_CELL;
+    return { min: Math.ceil(-half - halfW), max: Math.floor(half - halfW) };
   }
 
-  /** Aktiv bağlamanı bir X addımı sola (-1) və ya sağa (+1) aparır. */
-  move(direction: -1 | 1): boolean {
-    const p = this.activeParcel;
-    if (!p) return false;
-    const x = p.x + direction;
-    if (this.collides(p.cells, x, p.y)) return false;
-    p.x = x;
-    return true;
-  }
-
-  /** Aktiv bağlamanı 90° döndərir; yer tutulubsa döndərmir. */
-  rotate(): boolean {
-    const p = this.activeParcel;
-    if (!p) return false;
-    const rot = ((p.rot + 1) % 4) as Rotation;
-    const cells = parcelCells(p.kind, rot);
-    if (this.collides(cells, p.x, p.y)) return false;
-    p.rot = rot;
-    p.cells = cells;
-    return true;
-  }
-
-  setFastDrop(on: boolean): void {
-    this.fastDrop = on;
-  }
-
-  /** Aktiv bağlamanın düşəcəyi Y (kölgə üçün). Simulyasiyanı dəyişmir. */
-  ghostY(): number | null {
-    const p = this.activeParcel;
-    if (!p) return null;
-    return this.dropFrom(p.cells, p.x, p.y);
+  /** X-i platforma diapazonuna sıxışdırır. */
+  clampX(kind: ParcelKind, rot: ParcelRotation, x: number): number {
+    const { min, max } = this.xRange(kind, rot);
+    return Math.max(min, Math.min(max, x));
   }
 
   /**
-   * Verilmiş bağlama, dönmə və X mövqeyi üçün yerə düşmə Y-si (spawn hündürlüyündən endirilir).
-   * Botların plan qurması üçündür; simulyasiyanı dəyişmir. Altda heç nə yoxdursa `null`.
+   * Bağlamanı buraxma xəttindən (x mövqeyində) buraxır: dinamik cismə çevrilir və jurnala yazılır.
+   * Buraxma xəttində yer tutulubsa, boş yer tapılana qədər yuxarı qaldırılır.
    */
-  landingY(kind: NormalParcelKind, rot: Rotation, x: number): number | null {
-    const cells = parcelCells(kind, rot);
-    const y = this.spawnY();
-    if (this.collides(cells, x, y)) return null;
-    return this.dropFrom(cells, x, y);
+  dropAt(kind: ParcelKind, rot: ParcelRotation, x: number): ReleaseEvent {
+    const cx = this.clampX(kind, rot, x);
+    let y = this.dropLineY();
+    while (this.collides(kind, rot, cx, y)) y += Y_STEPS_PER_CELL / 4;
+    const event: ReleaseEvent = {
+      tick: this.currentTick,
+      type: 'release',
+      parcel: kind,
+      rot,
+      x: cx,
+      y,
+    };
+    this.addBody(event);
+    this.releaseLog.push(event);
+    return event;
   }
 
-  /** Bağlamanın platformada qala biləcəyi X diapazonu (X addımı ilə). */
-  xRange(kind: NormalParcelKind, rot: Rotation): { min: number; max: number } {
-    const { width } = cellBounds(parcelCells(kind, rot));
-    const half = (this.map.platformWidth / 2) * X_STEPS_PER_CELL;
-    return { min: -half, max: half - width * X_STEPS_PER_CELL };
+  /**
+   * Bağlama x mövqeyindən buraxılsa, harada dayanacağını təxmin edir (sol-aşağı künc Y-si, Y addımı ilə).
+   * Fizikanı işə salmır: yalnız düz aşağı endirib ilk toxunuşu tapır. Botlar və bələdçi xətlər üçündür.
+   */
+  landingY(kind: ParcelKind, rot: ParcelRotation, x: number): number | null {
+    const floor = LOST_Y * Y_STEPS_PER_CELL;
+    let y = this.dropLineY();
+    if (this.collides(kind, rot, x, y)) return null;
+    const coarse = Y_STEPS_PER_CELL / 4;
+    while (y - coarse > floor && !this.collides(kind, rot, x, y - coarse)) y -= coarse;
+    while (y - 1 > floor && !this.collides(kind, rot, x, y - 1)) y -= 1;
+    return y - 1 > floor ? y : null;
+  }
+
+  /** Bir tick irəli. */
+  step(): void {
+    this.stepWorld();
+  }
+
+  /** Qüllənin hündürlüyü (hüceyrə): yalnız sabitləşmiş bağlamalar sayılır. */
+  getHeight(): number {
+    return this.measure().settled;
+  }
+
+  /** Bütün bağlamaların (hərəkətdə olanlar daxil) ən yüksək nöqtəsi (hüceyrə). */
+  getTopAny(): number {
+    return this.measure().any;
+  }
+
+  /** Bütün buraxılmış bağlamalar sabitləşibmi? */
+  isSettled(): boolean {
+    return this.bodies.every((b) => b.settled);
   }
 
   /** Son çağırışdan bəri baş vermiş hadisələri qaytarır və siyahını təmizləyir. */
@@ -252,79 +246,6 @@ export class TowerSim {
     return events;
   }
 
-  /** Aktiv bağlamanı olduğu yerdə buraxır: dinamik cismə çevrilir və jurnala yazılır. */
-  release(): ReleaseEvent | null {
-    const p = this.activeParcel;
-    if (!p) return null;
-    const event: ReleaseEvent = {
-      tick: this.currentTick,
-      type: 'release',
-      parcel: p.kind,
-      x: p.x,
-      y: p.y,
-      rot: p.rot,
-    };
-    this.addDynamicParcel(event);
-    this.releaseLog.push(event);
-    this.activeParcel = null;
-    return event;
-  }
-
-  /**
-   * Bir tick irəli: aktiv bağlama enir (maneəyə çatanda avtomatik buraxılır), sonra fizika addımı.
-   * Qaytarır: bu tick-də buraxılma baş veribsə, onun hadisəsi.
-   */
-  step(): ReleaseEvent | null {
-    let released: ReleaseEvent | null = null;
-    const p = this.activeParcel;
-    if (p) {
-      const speed = this.fastDrop ? FAST_DESCENT : SLOW_DESCENT;
-      let moved = 0;
-      while (moved < speed && !this.collides(p.cells, p.x, p.y - 1)) {
-        p.y -= 1;
-        moved++;
-      }
-      // Maneəyə çatıb və ya platformadan kənarda çox aşağı düşübsə, buraxılır.
-      if (moved < speed || p.y < LOST_Y * Y_STEPS_PER_CELL) released = this.release();
-    }
-    this.stepWorld();
-    return released;
-  }
-
-  /** Qüllənin hündürlüyü (hüceyrə): yalnız sabitləşmiş bağlamalar sayılır. */
-  getHeight(): number {
-    if (this.heightCache?.tick === this.currentTick) return this.heightCache.value;
-    const half = this.map.platformWidth / 2;
-    const top = 1000;
-    let height = 0;
-    const ray = new this.R.Ray({ x: 0, y: top }, { x: 0, y: -1 });
-    const isSettled = (c: Collider) => this.settledColliders.has(c.handle);
-    for (let x = -half + 0.125; x < half; x += 0.25) {
-      ray.origin = { x, y: top };
-      const hit = this.world.castRay(
-        ray,
-        top + 1,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        isSettled,
-      );
-      if (hit) {
-        const y = top - hit.timeOfImpact;
-        if (y > height) height = y;
-      }
-    }
-    this.heightCache = { tick: this.currentTick, value: height };
-    return height;
-  }
-
-  /** Bütün buraxılmış bağlamalar sabitləşibmi? */
-  isSettled(): boolean {
-    return this.bodies.every((b) => b.settled);
-  }
-
   /** Render üçün cisimlərin vəziyyəti. */
   bodyViews(): BodyView[] {
     return this.bodies.map((b) => {
@@ -332,10 +253,12 @@ export class TowerSim {
       return {
         id: b.id,
         kind: b.kind,
+        rot: b.rot,
         x: t.x,
         y: t.y,
         angle: b.body.rotation(),
-        cells: b.cells,
+        w: b.w,
+        h: b.h,
         settled: b.settled,
       };
     });
@@ -350,6 +273,35 @@ export class TowerSim {
     this.world.free();
   }
 
+  /** Platformanın üstündə şüalarla ən yüksək nöqtələri ölçür (tick başına bir dəfə). */
+  private measure(): { settled: number; any: number } {
+    if (this.cache?.tick === this.currentTick) return this.cache;
+    const half = this.map.platformWidth / 2;
+    const top = 1000;
+    let settled = 0;
+    let any = 0;
+    const ray = new this.R.Ray({ x: 0, y: top }, { x: 0, y: -1 });
+    const isSettled = (c: Collider) => this.settledColliders.has(c.handle);
+    for (let x = -half + RAY_SPACING / 2; x < half; x += RAY_SPACING) {
+      ray.origin = { x, y: top };
+      const hitAny = this.world.castRay(ray, top + 1, true);
+      if (hitAny) any = Math.max(any, top - hitAny.timeOfImpact);
+      const hitSettled = this.world.castRay(
+        ray,
+        top + 1,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        isSettled,
+      );
+      if (hitSettled) settled = Math.max(settled, top - hitSettled.timeOfImpact);
+    }
+    this.cache = { tick: this.currentTick, settled, any };
+    return this.cache;
+  }
+
   private stepWorld(): void {
     this.world.step();
     this.currentTick++;
@@ -357,10 +309,9 @@ export class TowerSim {
     for (let i = this.bodies.length - 1; i >= 0; i--) {
       const tracked = this.bodies[i]!;
       const body = tracked.body;
+      const handle = body.collider(0).handle;
       if (body.translation().y < LOST_Y) {
-        for (let c = 0; c < body.numColliders(); c++) {
-          this.settledColliders.delete(body.collider(c).handle);
-        }
+        this.settledColliders.delete(handle);
         this.world.removeRigidBody(body);
         this.bodies.splice(i, 1);
         this.lost++;
@@ -381,8 +332,7 @@ export class TowerSim {
         tracked.calmTicks = calm ? tracked.calmTicks + 1 : 0;
         if (tracked.calmTicks >= SETTLE_TICKS) tracked.settled = true;
       }
-      const settled = tracked.settled;
-      if (settled && !tracked.reported) {
+      if (tracked.settled && !tracked.reported) {
         tracked.reported = true;
         const ticksToCalm = this.currentTick - SETTLE_TICKS - tracked.releaseTick;
         const support = this.measureSupport(tracked);
@@ -395,38 +345,35 @@ export class TowerSim {
           ticksToCalm,
         });
       }
-      for (let c = 0; c < body.numColliders(); c++) {
-        const handle = body.collider(c).handle;
-        if (settled) this.settledColliders.add(handle);
-        else this.settledColliders.delete(handle);
-      }
+      if (tracked.settled) this.settledColliders.add(handle);
+      else this.settledColliders.delete(handle);
     }
   }
 
-  private addDynamicParcel(event: ReleaseEvent): void {
+  private addBody(event: ReleaseEvent): void {
     const R = this.R;
-    const cells = parcelCells(event.parcel, event.rot);
+    const { w, h } = parcelSize(event.parcel, event.rot);
     const body = this.world.createRigidBody(
       R.RigidBodyDesc.dynamic()
         .setTranslation(event.x / X_STEPS_PER_CELL, event.y / Y_STEPS_PER_CELL)
         .setLinearDamping(PARCEL_LINEAR_DAMPING)
         .setAngularDamping(PARCEL_ANGULAR_DAMPING),
     );
-    for (const [c, r] of cells) {
-      this.world.createCollider(
-        R.ColliderDesc.cuboid(CELL_HALF, CELL_HALF)
-          .setTranslation(c + CELL_HALF, r + CELL_HALF)
-          .setDensity(1)
-          .setFriction(PARCEL_FRICTION)
-          .setRestitution(0),
-        body,
-      );
-    }
+    this.world.createCollider(
+      R.ColliderDesc.cuboid(w / 2, h / 2)
+        .setTranslation(w / 2, h / 2)
+        .setDensity(1)
+        .setFriction(PARCEL_FRICTION)
+        .setRestitution(0),
+      body,
+    );
     this.bodies.push({
       id: this.nextBodyId++,
       body,
       kind: event.parcel,
-      cells,
+      rot: event.rot,
+      w,
+      h,
       calmTicks: 0,
       settled: false,
       releaseTick: event.tick,
@@ -436,69 +383,48 @@ export class TowerSim {
 
   /**
    * Bağlamanın alt səthinin neçə faizinin dəstəkləndiyini ölçür (0–1).
-   * Hər alt hüceyrənin altından 4 qısa şüa atılır. Əyilmiş bağlama dəstəklənmiş sayılmır,
-   * çünki bucaqsız (trigonometriyasız) ölçmə yalnız düz vəziyyətdə dəqiqdir.
+   * Alt kənar boyunca qısa şüalar atılır. Əyilmiş bağlama dəstəklənmiş sayılmır, çünki
+   * trigonometriyasız ölçmə yalnız düz vəziyyətdə dəqiqdir.
    */
   private measureSupport(tracked: TrackedBody): number {
     const angle = tracked.body.rotation();
     if (angle > MAX_FLAT_ANGLE || angle < -MAX_FLAT_ANGLE) return 0;
-    const occupied = new Set(tracked.cells.map(([c, r]) => `${c},${r}`));
+    const center = tracked.body.collider(0).translation();
+    const left = center.x - tracked.w / 2;
+    const bottom = center.y - tracked.h / 2;
+    const samples = Math.max(2, Math.round(tracked.w * SUPPORT_SAMPLES_PER_CELL));
     const ray = new this.R.Ray({ x: 0, y: 0 }, { x: 0, y: -1 });
-    let total = 0;
     let supported = 0;
-    tracked.cells.forEach(([c, r], index) => {
-      if (occupied.has(`${c},${r - 1}`)) return;
-      const center = tracked.body.collider(index).translation();
-      for (const dx of SUPPORT_SAMPLES) {
-        total++;
-        ray.origin = { x: center.x + dx, y: center.y - CELL_HALF + 0.05 };
-        const hit = this.world.castRay(
-          ray,
-          0.15,
-          true,
-          undefined,
-          undefined,
-          undefined,
-          tracked.body,
-        );
-        if (hit) supported++;
-      }
-    });
-    return total === 0 ? 0 : supported / total;
-  }
-
-  private spawnY(): number {
-    return (Math.ceil(this.getHeight()) + SPAWN_GAP_CELLS) * Y_STEPS_PER_CELL;
-  }
-
-  /** (x, y)-dən aşağı endirib ilk toxunuş mövqeyini tapır; platformadan kənardadırsa `null`. */
-  private dropFrom(cells: readonly Cell[], x: number, startY: number): number | null {
-    const floor = LOST_Y * Y_STEPS_PER_CELL;
-    let y = startY;
-    const coarse = Y_STEPS_PER_CELL / 4;
-    while (y - coarse > floor && !this.collides(cells, x, y - coarse)) y -= coarse;
-    while (y - 1 > floor && !this.collides(cells, x, y - 1)) y -= 1;
-    return y - 1 > floor ? y : null;
-  }
-
-  /** Hüceyrələr (x, y) mövqeyində hər hansı kolliderlə kəsişirmi? */
-  private collides(cells: readonly Cell[], x: number, y: number): boolean {
-    const shape = new this.R.Cuboid(QUERY_HALF, QUERY_HALF);
-    const ox = x / X_STEPS_PER_CELL;
-    const oy = y / Y_STEPS_PER_CELL;
-    let hit = false;
-    for (const [c, r] of cells) {
-      this.world.intersectionsWithShape(
-        { x: ox + c + CELL_HALF, y: oy + r + CELL_HALF },
-        0,
-        shape,
-        () => {
-          hit = true;
-          return false;
-        },
+    for (let i = 0; i < samples; i++) {
+      ray.origin = { x: left + ((i + 0.5) * tracked.w) / samples, y: bottom + 0.05 };
+      const hit = this.world.castRay(
+        ray,
+        0.15,
+        true,
+        undefined,
+        undefined,
+        undefined,
+        tracked.body,
       );
-      if (hit) return true;
+      if (hit) supported++;
     }
-    return false;
+    return supported / samples;
+  }
+
+  /** Bağlama (x, y) mövqeyində hər hansı kolliderlə kəsişirmi? */
+  private collides(kind: ParcelKind, rot: ParcelRotation, x: number, y: number): boolean {
+    const { w, h } = parcelSize(kind, rot);
+    const shape = new this.R.Cuboid(w / 2 - QUERY_MARGIN, h / 2 - QUERY_MARGIN);
+    let hit = false;
+    this.world.intersectionsWithShape(
+      { x: x / X_STEPS_PER_CELL + w / 2, y: y / Y_STEPS_PER_CELL + h / 2 },
+      0,
+      shape,
+      () => {
+        hit = true;
+        return false;
+      },
+    );
+    return hit;
   }
 }
