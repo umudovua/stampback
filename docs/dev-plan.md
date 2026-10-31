@@ -3,7 +3,10 @@
 > Mənbə: claude.ai-dakı "Stampback — Development Planı v0.1" sənədi, 31 oktyabr 2026.
 > Sənəd dəyişəndə bu nüsxəni də yeniləyin.
 
-**Status:** M0 tamamlanıb (commit `M0: layihə skeleti (T1–T5)`). Növbəti: M1-T1.
+**Status:** M0 tamamlanıb. M1-T1–T5 tamamlanıb: oynanılan tək oyunçulu prototip, determinizm
+CI-da 4 mühitdə (Node.js, Chromium, Firefox, WebKit) təsdiqlənib, smoke test telefon ölçülü
+Chromium-da ekran şəkli çəkir (`smoke-screenshots` branch-i). Növbəti: M1-T6 — real telefonda
+ölçmə və idarəetmə rəyi (istifadəçi tərəfindən).
 
 ## 1. Xülasə
 
@@ -81,6 +84,8 @@ M0-ın nəticəsi oyun məntiqi olmayan, amma bütün alətləri işləyən layi
 - [ ] **Keçid yoxlaması:** `pnpm dev` ilə telefonda açmaq (istifadəçi tərəfindən).
 
 ## 5. M1 — Tək oyunçulu prototip
+
+> T1–T5 tamamlanıb. T6 real cihaz və oyunçular tələb edir.
 
 M1 multiplayer-siz bir qüllə ilə iki əsas riski yoxlayır: telefonda dəqiq yerləşdirmə və brauzerlər arası determinizm. Qrafika sadə rəngli formalarla (placeholder) olur. **Keçid meyarı:** determinizm hash-ləri 4 mühitdə eynidir; referans Android telefonda 40 bağlamalı qüllə axıcı işləyir; 3–5 nəfər izahsız bağlamaları dəqiq yerləşdirə bilir.
 
