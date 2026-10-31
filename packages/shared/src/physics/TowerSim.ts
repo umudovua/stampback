@@ -20,8 +20,14 @@ import {
   X_STEPS_PER_CELL,
   Y_STEPS_PER_CELL,
 } from './constants';
+import { isPerfectPlacement } from '../rules/perfect';
 import { fnv1a32 } from './hash';
 import { loadRapier, type Rapier } from './rapier';
+
+/** Bu bucaqdan (radian) çox əyilmiş bağlama “düz” sayılmır. */
+const MAX_FLAT_ANGLE = 0.05;
+/** Alt hüceyrə boyunca dəstək yoxlaması nöqtələri (hüceyrə mərkəzinə nisbətən). */
+const SUPPORT_SAMPLES = [-0.375, -0.125, 0.125, 0.375] as const;
 
 type World = InstanceType<Rapier['World']>;
 type RigidBody = ReturnType<World['createRigidBody']>;
@@ -41,6 +47,18 @@ export interface ReleaseEvent {
   y: number;
   rot: Rotation;
 }
+
+/** Simulyasiyanın xəbər verdiyi hadisələr (HUD, xal və marka üçün). */
+export type SimEvent =
+  | {
+      type: 'settled';
+      id: number;
+      tick: number;
+      perfect: boolean;
+      support: number;
+      ticksToCalm: number;
+    }
+  | { type: 'lost'; id: number; tick: number };
 
 /** Oyunçunun hələ idarə etdiyi, fizikaya daxil olmayan bağlama. */
 export interface ActiveParcel {
@@ -68,6 +86,8 @@ interface TrackedBody {
   kind: NormalParcelKind;
   cells: readonly Cell[];
   calmTicks: number;
+  releaseTick: number;
+  reported: boolean;
 }
 
 /**
@@ -90,6 +110,7 @@ export class TowerSim {
   private activeParcel: ActiveParcel | null = null;
   private fastDrop = false;
   private heightCache: { tick: number; value: number } | null = null;
+  private pendingEvents: SimEvent[] = [];
 
   private constructor(R: Rapier, map: MapDef) {
     this.R = R;
@@ -102,6 +123,10 @@ export class TowerSim {
       R.ColliderDesc.cuboid(map.platformWidth / 2, 0.5).setFriction(0.9),
       platform,
     );
+    // Rapier sorğu strukturlarını (broad phase) ilk addımda qurur. Boş dünyada bir hazırlıq
+    // addımı edirik ki, ilk spawn və kölgə sorğuları platformanı görsün. Dinamik cisim
+    // olmadığı üçün nəticəyə təsir etmir; tick sayına daxil edilmir.
+    this.world.step();
   }
 
   /** Rapier-i yükləyir və boş qüllə yaradır. */
@@ -189,6 +214,26 @@ export class TowerSim {
     this.fastDrop = on;
   }
 
+  /** Aktiv bağlamanın düşəcəyi Y (kölgə üçün). Simulyasiyanı dəyişmir. */
+  ghostY(): number | null {
+    const p = this.activeParcel;
+    if (!p) return null;
+    // Platformadan kənarda altda heç nə yoxdur: kölgə göstərilmir.
+    const floor = LOST_Y * Y_STEPS_PER_CELL;
+    let y = p.y;
+    const coarse = Y_STEPS_PER_CELL / 4;
+    while (y - coarse > floor && !this.collides(p.cells, p.x, y - coarse)) y -= coarse;
+    while (y - 1 > floor && !this.collides(p.cells, p.x, y - 1)) y -= 1;
+    return y - 1 > floor ? y : null;
+  }
+
+  /** Son çağırışdan bəri baş vermiş hadisələri qaytarır və siyahını təmizləyir. */
+  drainEvents(): SimEvent[] {
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
+    return events;
+  }
+
   /** Aktiv bağlamanı olduğu yerdə buraxır: dinamik cismə çevrilir və jurnala yazılır. */
   release(): ReleaseEvent | null {
     const p = this.activeParcel;
@@ -221,7 +266,8 @@ export class TowerSim {
         p.y -= 1;
         moved++;
       }
-      if (moved < speed) released = this.release();
+      // Maneəyə çatıb və ya platformadan kənarda çox aşağı düşübsə, buraxılır.
+      if (moved < speed || p.y < LOST_Y * Y_STEPS_PER_CELL) released = this.release();
     }
     this.stepWorld();
     return released;
@@ -300,6 +346,7 @@ export class TowerSim {
         this.world.removeRigidBody(body);
         this.bodies.splice(i, 1);
         this.lost++;
+        this.pendingEvents.push({ type: 'lost', id: tracked.id, tick: this.currentTick });
         continue;
       }
       const v = body.linvel();
@@ -307,6 +354,19 @@ export class TowerSim {
       const calm = v.x * v.x + v.y * v.y < CALM_SPEED_SQ && w * w < CALM_SPEED_SQ;
       tracked.calmTicks = calm ? tracked.calmTicks + 1 : 0;
       const settled = tracked.calmTicks >= SETTLE_TICKS;
+      if (settled && !tracked.reported) {
+        tracked.reported = true;
+        const ticksToCalm = this.currentTick - SETTLE_TICKS - tracked.releaseTick;
+        const support = this.measureSupport(tracked);
+        this.pendingEvents.push({
+          type: 'settled',
+          id: tracked.id,
+          tick: this.currentTick,
+          perfect: isPerfectPlacement({ ticksToCalm, support }),
+          support,
+          ticksToCalm,
+        });
+      }
       for (let c = 0; c < body.numColliders(); c++) {
         const handle = body.collider(c).handle;
         if (settled) this.settledColliders.add(handle);
@@ -334,7 +394,48 @@ export class TowerSim {
         body,
       );
     }
-    this.bodies.push({ id: this.nextBodyId++, body, kind: event.parcel, cells, calmTicks: 0 });
+    this.bodies.push({
+      id: this.nextBodyId++,
+      body,
+      kind: event.parcel,
+      cells,
+      calmTicks: 0,
+      releaseTick: event.tick,
+      reported: false,
+    });
+  }
+
+  /**
+   * Bağlamanın alt səthinin neçə faizinin dəstəkləndiyini ölçür (0–1).
+   * Hər alt hüceyrənin altından 4 qısa şüa atılır. Əyilmiş bağlama dəstəklənmiş sayılmır,
+   * çünki bucaqsız (trigonometriyasız) ölçmə yalnız düz vəziyyətdə dəqiqdir.
+   */
+  private measureSupport(tracked: TrackedBody): number {
+    const angle = tracked.body.rotation();
+    if (angle > MAX_FLAT_ANGLE || angle < -MAX_FLAT_ANGLE) return 0;
+    const occupied = new Set(tracked.cells.map(([c, r]) => `${c},${r}`));
+    const ray = new this.R.Ray({ x: 0, y: 0 }, { x: 0, y: -1 });
+    let total = 0;
+    let supported = 0;
+    tracked.cells.forEach(([c, r], index) => {
+      if (occupied.has(`${c},${r - 1}`)) return;
+      const center = tracked.body.collider(index).translation();
+      for (const dx of SUPPORT_SAMPLES) {
+        total++;
+        ray.origin = { x: center.x + dx, y: center.y - CELL_HALF + 0.05 };
+        const hit = this.world.castRay(
+          ray,
+          0.15,
+          true,
+          undefined,
+          undefined,
+          undefined,
+          tracked.body,
+        );
+        if (hit) supported++;
+      }
+    });
+    return total === 0 ? 0 : supported / total;
   }
 
   /** Hüceyrələr (x, y) mövqeyində hər hansı kolliderlə kəsişirmi? */

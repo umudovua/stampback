@@ -10,4 +10,10 @@
 export * from './constants';
 export { fnv1a32 } from './hash';
 export { loadRapier } from './rapier';
-export { TowerSim, type ActiveParcel, type BodyView, type ReleaseEvent } from './TowerSim';
+export {
+  TowerSim,
+  type ActiveParcel,
+  type BodyView,
+  type ReleaseEvent,
+  type SimEvent,
+} from './TowerSim';

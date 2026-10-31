@@ -120,3 +120,53 @@ describe('TowerSim', () => {
     replayed.dispose();
   });
 });
+
+describe('TowerSim events and ghost', () => {
+  it('reports a flat drop on the platform as a perfect placement', async () => {
+    const sim = await TowerSim.create(POST_OFFICE);
+    sim.spawnParcel('O');
+    dropAndSettle(sim);
+    const events = sim.drainEvents();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'settled', perfect: true, support: 1 });
+    expect(sim.drainEvents()).toHaveLength(0);
+    sim.dispose();
+  });
+
+  it('does not count an overhanging parcel as perfect', async () => {
+    const sim = await TowerSim.create(POST_OFFICE);
+    sim.spawnParcel('O');
+    dropAndSettle(sim);
+    sim.drainEvents();
+    // I bağlaması O-nun üstündə yan tərəfə 2 hüceyrə çıxır: dəstək 50%.
+    sim.spawnParcel('I');
+    for (let i = 0; i < 4; i++) sim.move(1);
+    dropAndSettle(sim);
+    const settled = sim.drainEvents().filter((e) => e.type === 'settled');
+    expect(settled).toHaveLength(1);
+    expect(settled[0]).toMatchObject({ perfect: false });
+    sim.dispose();
+  });
+
+  it('reports lost parcels', async () => {
+    const sim = await TowerSim.create(POST_OFFICE);
+    sim.spawnParcel('O');
+    for (let i = 0; i < 40; i++) sim.move(1);
+    sim.release();
+    for (let i = 0; i < 300; i++) sim.step();
+    expect(sim.drainEvents()).toContainEqual(expect.objectContaining({ type: 'lost' }));
+    sim.dispose();
+  });
+
+  it('places the ghost exactly where the parcel lands', async () => {
+    const sim = await TowerSim.create(POST_OFFICE);
+    sim.spawnParcel('T');
+    const ghost = sim.ghostY();
+    expect(ghost).not.toBeNull();
+    sim.setFastDrop(true);
+    let released = null;
+    while (!released) released = sim.step();
+    expect(released.y).toBe(ghost);
+    sim.dispose();
+  });
+});
