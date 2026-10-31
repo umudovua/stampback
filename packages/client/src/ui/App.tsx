@@ -7,7 +7,6 @@ import { Hud } from '../hud/Hud';
 export function App() {
   return (
     <main>
-      <div class="title-stamp">Stampback</div>
       <Hud />
     </main>
   );

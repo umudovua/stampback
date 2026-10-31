@@ -5,7 +5,6 @@ import { hudStore } from '../game/hudStore';
 import { FINISH_HEIGHT } from '../game/players';
 import { t } from '../i18n';
 import { InputController } from '../input/InputController';
-import { drawBackground } from '../render/Background';
 import { CARDBOARD, drawParcel } from '../render/parcelArt';
 import { TowerRenderer, type TowerStyle } from '../render/TowerRenderer';
 
@@ -17,11 +16,17 @@ const BOTTOM_RESERVE_PX = 56;
 /** Arxadakı rəqib qülləsinin şəffaflığı (“şüşə arxasında” görünüş). */
 const RIVAL_ALPHA = 0.3;
 
+/** Sadə, sakit fon: dekorasiya real qrafika gələnə qədər çıxarılıb. */
+const BACKGROUND = 0xe9dcc6;
 const COUNTER_TOP = 0x8a6545;
 const COUNTER = 0x6b4b30;
 const COUNTER_LINE = 0x5a3e27;
 const FINISH = 0xb8322a;
 const GHOST = 0xffffff;
+/** Bir hərəkət addımı: yarım hüceyrə (2 X addımı). Alt qutularla düzləməni asanlaşdırır. */
+const MOVE_STEPS = 2;
+/** Aktiv bağlamanın ekranda yeni mövqeyə hamar çatma müddəti (ms, eksponensial). */
+const MOVE_SMOOTH_MS = 45;
 
 /**
  * Oflayn matç səhnəsi: öz qüllən ön planda, ən yaxın rəqibin qülləsi arxada yarımşəffaf,
@@ -45,6 +50,8 @@ export class MatchScene extends Phaser.Scene {
   private physicsMsSamples: number[] = [];
   private hudTimer = 0;
   private generation = 0;
+  private activeRef: object | null = null;
+  private activeDrawX = 0;
 
   constructor() {
     super('MatchScene');
@@ -65,7 +72,7 @@ export class MatchScene extends Phaser.Scene {
       .setDepth(3);
 
     this.controls = new InputController(this, {
-      move: (dir) => this.match?.me.sim.move(dir),
+      move: (dir) => this.moveActive(dir),
       rotate: () => this.match?.me.sim.rotate(),
       fastDrop: (on) => this.match?.me.sim.setFastDrop(on),
     });
@@ -110,7 +117,7 @@ export class MatchScene extends Phaser.Scene {
     const alpha = this.accumulator / STEP_MS;
     this.rivalTower?.render(alpha);
     this.myTower?.render(alpha);
-    this.renderActive();
+    this.renderActive(delta);
     this.followTower(delta);
     this.updateHud(delta);
   }
@@ -160,20 +167,43 @@ export class MatchScene extends Phaser.Scene {
       this.rivalTower = new TowerRenderer(this, target.sim, this.rivalStyle(target), this.scalePx);
   }
 
-  private renderActive(): void {
+  /** Yarım hüceyrə sürüşdürür; divara dəyib yarıda qalarsa, geri qaytarır ki, düzləmə pozulmasın. */
+  private moveActive(dir: -1 | 1): void {
+    const sim = this.match?.me.sim;
+    if (!sim?.active) return;
+    let moved = 0;
+    while (moved < MOVE_STEPS && sim.move(dir)) moved++;
+    if (moved > 0 && moved < MOVE_STEPS) {
+      while (moved-- > 0) sim.move(dir === 1 ? -1 : 1);
+    }
+  }
+
+  private renderActive(delta: number): void {
     const g = this.activeGfx;
     g.clear();
     const me = this.match?.me;
     const active = me?.sim.active;
-    if (!me || !active) return;
+    if (!me || !active) {
+      this.activeRef = null;
+      return;
+    }
     const s = this.scalePx;
-    const ox = (active.x / X_STEPS_PER_CELL) * s;
+    const targetX = (active.x / X_STEPS_PER_CELL) * s;
+    if (this.activeRef !== active) {
+      this.activeRef = active;
+      this.activeDrawX = targetX;
+    }
+    // Məntiqi mövqe dərhal dəyişir (kölgə dəqiqdir), ekrandakı bağlama isə ora hamar sürüşür.
+    this.activeDrawX += (targetX - this.activeDrawX) * Math.min(1, delta / MOVE_SMOOTH_MS);
+    if (Math.abs(targetX - this.activeDrawX) < 0.5) this.activeDrawX = targetX;
+    const ox = this.activeDrawX;
+    const ghostX = targetX;
 
     const ghostY = me.sim.ghostY();
     if (ghostY !== null) {
       const gy = (ghostY / Y_STEPS_PER_CELL) * s;
       g.fillStyle(GHOST, 0.28);
-      for (const [c, r] of active.cells) g.fillRect(ox + c * s, -(gy + (r + 1) * s), s, s);
+      for (const [c, r] of active.cells) g.fillRect(ghostX + c * s, -(gy + (r + 1) * s), s, s);
     }
 
     const oy = (active.y / Y_STEPS_PER_CELL) * s;
@@ -201,11 +231,11 @@ export class MatchScene extends Phaser.Scene {
     this.scalePx = Math.floor(Math.min(width / cellsAcross, height / 18));
     const s = this.scalePx;
     this.cameras.main.scrollX = -width / 2;
-    this.controls?.setStepPixels(s / X_STEPS_PER_CELL);
+    this.controls?.setStepPixels((s * MOVE_STEPS) / X_STEPS_PER_CELL);
     this.myTower?.setScale(s);
     this.rivalTower?.setScale(s);
 
-    drawBackground(this.background, width, height);
+    this.background.clear().fillStyle(BACKGROUND, 1).fillRect(0, 0, width, height);
 
     // Platforma poçt piştaxtası kimi; finiş xətti qırıq qırmızı xətt.
     const half = (POST_OFFICE.platformWidth / 2) * s;

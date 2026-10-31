@@ -12,8 +12,9 @@ const TAP_MAX_DISTANCE = 12;
 const TAP_MAX_MS = 250;
 /** Aşağı sürüşdürmənin sürətli endirməyə çevrildiyi məsafə (piksel). */
 const SWIPE_DOWN_PX = 40;
-/** Klaviaturada bir basış neçə X addımı aparır (1 hüceyrə = 4 addım). */
-const KEY_MOVE_STEPS = 4;
+/** Klaviaturada düyməni basıb saxlayanda: ilk təkrara qədər gecikmə və təkrar intervalı (ms). */
+const KEY_REPEAT_DELAY = 170;
+const KEY_REPEAT_INTERVAL = 60;
 
 /**
  * Toxunma və klaviaturanı eyni əmrlərə çevirir (GDD, bölmə 6).
@@ -28,6 +29,8 @@ export class InputController {
   private startTime = 0;
   private moved = false;
   private dropping = false;
+  private heldDir: -1 | 1 | 0 = 0;
+  private repeatTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -41,12 +44,13 @@ export class InputController {
     scene.input.keyboard?.on('keyup', this.onKeyUp, this);
   }
 
-  /** Bir X addımının (¼ hüceyrə) ekranda neçə piksel olduğu; ekran ölçüsü dəyişəndə yenilənir. */
+  /** Bir hərəkət addımının (½ hüceyrə) ekranda neçə piksel olduğu; ekran ölçüsü dəyişəndə yenilənir. */
   setStepPixels(px: number): void {
     this.stepPx = Math.max(4, px);
   }
 
   destroy(): void {
+    this.stopRepeat();
     this.scene.input.off('pointerdown', this.onPointerDown, this);
     this.scene.input.off('pointermove', this.onPointerMove, this);
     this.scene.input.off('pointerup', this.onPointerUp, this);
@@ -99,11 +103,11 @@ export class InputController {
     switch (event.code) {
       case 'ArrowLeft':
       case 'KeyA':
-        for (let i = 0; i < KEY_MOVE_STEPS; i++) this.commands.move(-1);
+        if (!event.repeat) this.startRepeat(-1);
         break;
       case 'ArrowRight':
       case 'KeyD':
-        for (let i = 0; i < KEY_MOVE_STEPS; i++) this.commands.move(1);
+        if (!event.repeat) this.startRepeat(1);
         break;
       case 'ArrowUp':
       case 'KeyW':
@@ -118,5 +122,38 @@ export class InputController {
 
   private onKeyUp(event: KeyboardEvent): void {
     if (event.code === 'ArrowDown' || event.code === 'KeyS') this.commands.fastDrop(false);
+    const dir =
+      event.code === 'ArrowLeft' || event.code === 'KeyA'
+        ? -1
+        : event.code === 'ArrowRight' || event.code === 'KeyD'
+          ? 1
+          : 0;
+    if (dir !== 0 && dir === this.heldDir) this.stopRepeat();
+  }
+
+  /**
+   * Düymə basılanda bir addım, saxlanılanda qısa gecikmədən sonra bərabər sürətlə təkrar.
+   * Əməliyyat sisteminin öz təkrar sürətindən asılı deyil.
+   */
+  private startRepeat(dir: -1 | 1): void {
+    this.stopRepeat();
+    this.heldDir = dir;
+    this.commands.move(dir);
+    this.repeatTimer = this.scene.time.addEvent({
+      delay: KEY_REPEAT_DELAY,
+      callback: () => {
+        this.repeatTimer = this.scene.time.addEvent({
+          delay: KEY_REPEAT_INTERVAL,
+          loop: true,
+          callback: () => this.commands.move(dir),
+        });
+      },
+    });
+  }
+
+  private stopRepeat(): void {
+    this.repeatTimer?.remove(false);
+    this.repeatTimer = null;
+    this.heldDir = 0;
   }
 }
