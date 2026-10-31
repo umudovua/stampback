@@ -5,28 +5,42 @@ import { t } from '../i18n';
 
 const showDebug = new URLSearchParams(location.search).has('debug');
 
+/** Adların üst-üstə düşməməsi üçün iki etiket arasında minimum məsafə (trekin hissəsi). */
+const LABEL_GAP = 0.08;
+
 /** Sağdakı hündürlük nərdivanı: bütün oyunçular finişə nisbətən (GDD, bölmə 6). */
 function HeightLadder({ players, finish }: { players: HudPlayer[]; finish: number }) {
+  const ratio = (p: HudPlayer) => Math.max(0, Math.min(1, p.height / finish));
+  // Nöqtələr dəqiq yerdə qalır; yaxın olan adlar isə aşağıya sürüşdürülür.
+  const sorted = [...players].sort((a, b) => b.height - a.height || a.id - b.id);
+  const labelAt = new Map<number, number>();
+  let previous = Infinity;
+  for (const p of sorted) {
+    const at = Math.min(ratio(p), previous - LABEL_GAP);
+    labelAt.set(p.id, at);
+    previous = at;
+  }
   return (
     <div class="ladder" aria-hidden="true">
       <span class="ladder-finish">{t('hud.finish')}</span>
       <div class="ladder-track">
-        {players.map((p) => {
-          const ratio = Math.max(0, Math.min(1, p.height / finish));
-          return (
-            <div
-              key={p.id}
-              class={`ladder-player${p.isMe ? ' is-me' : ''}${p.isTarget ? ' is-target' : ''}`}
-              style={{ bottom: `${ratio * 100}%`, '--player': colorCss(p.color) }}
-            >
-              <span class="ladder-dot" />
-              <span class="ladder-name">
-                {p.name}
-                {p.isTarget && <small> · {t('hud.target')}</small>}
-              </span>
-            </div>
-          );
-        })}
+        {players.map((p) => (
+          <span
+            key={`dot-${p.id}`}
+            class={`ladder-dot${p.isMe ? ' is-me' : ''}`}
+            style={{ bottom: `${ratio(p) * 100}%`, '--player': colorCss(p.color) }}
+          />
+        ))}
+        {players.map((p) => (
+          <span
+            key={`name-${p.id}`}
+            class="ladder-name"
+            style={{ bottom: `${(labelAt.get(p.id) ?? 0) * 100}%`, '--player': colorCss(p.color) }}
+          >
+            {p.name}
+            {p.isTarget && <small> · {t('hud.target')}</small>}
+          </span>
+        ))}
       </div>
     </div>
   );

@@ -3,8 +3,8 @@ import type Phaser from 'phaser';
 const WALL = 0xe8d4b2;
 const WAINSCOT = 0xcfae85;
 const WAINSCOT_LINE = 0xbf9b70;
-const SHELF = 0xa98258;
-const SHELF_BOX = [0xd9b88d, 0xc9a477, 0xdcc199] as const;
+const SHELF = 0xc4a079;
+const SHELF_BOX = [0xe0c49c, 0xd8b98d, 0xe3caa6] as const;
 
 /**
  * Sadə poçt şöbəsi arxa planı: divar, panel və arxada rəfli bağlamalar.

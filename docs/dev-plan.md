@@ -86,6 +86,10 @@ M0-ın nəticəsi oyun məntiqi olmayan, amma bütün alətləri işləyən layi
 ## 5. M1 — Tək oyunçulu prototip
 
 > T1–T5 tamamlanıb. T6 real cihaz və oyunçular tələb edir.
+>
+> İstifadəçi rəyindən sonra M2-dən əvvəl əlavə edildi: oflayn botlar (`shared/bots`), ən yaxın
+> rəqibin qülləsi arxada yarımşəffaf, hündürlük nərdivanı, finiş xətti (15 hüceyrə), qalib ekranı
+> və kodla çəkilmiş müvəqqəti poçt qrafikası.
 
 M1 multiplayer-siz bir qüllə ilə iki əsas riski yoxlayır: telefonda dəqiq yerləşdirmə və brauzerlər arası determinizm. Qrafika sadə rəngli formalarla (placeholder) olur. **Keçid meyarı:** determinizm hash-ləri 4 mühitdə eynidir; referans Android telefonda 40 bağlamalı qüllə axıcı işləyir; 3–5 nəfər izahsız bağlamaları dəqiq yerləşdirə bilir.
 
